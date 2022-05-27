@@ -1,10 +1,13 @@
 package domain
 
+import "time"
+
 type (
 	SignUpInput struct {
 		// FullName is not required
-		FullName    string `json:"fullName"`
-		PhoneNumber string `json:"phoneNumber"`
+		FullName    string    `json:"fullName"`
+		PhoneNumber string    `json:"phoneNumber"`
+		BirthData   time.Time `json:"birthDate"`
 
 		// Email is not required
 		Email   string  `json:"email"`
