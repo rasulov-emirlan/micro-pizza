@@ -55,6 +55,6 @@ func (s *service) Update(ctx context.Context, changeset UpdateInput) error {
 	panic("not implemented")
 }
 
-func (s *service) Delte(ctx context.Context, userID ID) error {
+func (s *service) Delete(ctx context.Context, whosDeleting, whomToDelete ID) error {
 	panic("not implemented")
 }

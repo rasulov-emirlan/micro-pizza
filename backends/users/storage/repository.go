@@ -1,1 +1,4 @@
-package main
+package storage
+
+type repository struct {
+}

@@ -12,7 +12,7 @@ type (
 		RemoveRole(ctx context.Context, adminID, userID ID, role Role) error
 
 		Update(ctx context.Context, changeset UpdateInput) error
-		Delte(ctx context.Context, userID ID) error
+		Delete(ctx context.Context, whosDeleting, whomToDelete ID) error
 	}
 
 	Repository interface {

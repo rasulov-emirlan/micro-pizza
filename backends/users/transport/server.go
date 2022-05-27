@@ -1,4 +1,4 @@
-package main
+package transport
 
 type server struct {
 }
