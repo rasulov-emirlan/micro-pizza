@@ -9,11 +9,11 @@ import (
 	"github.com/rasulov-emirlan/micro-pizzas/backends/users/storage/psql/migrations"
 )
 
-type repository struct {
+type Repository struct {
 	conn *pgxpool.Pool
 }
 
-func NewRepository(url string, withMigrations bool) (*repository, error) {
+func NewRepository(url string, withMigrations bool) (*Repository, error) {
 	db, err := pgxpool.Connect(context.Background(), url)
 	if err != nil {
 		// if our db starts in another docker container simultaneously
@@ -33,10 +33,10 @@ func NewRepository(url string, withMigrations bool) (*repository, error) {
 			return nil, err
 		}
 	}
-	return &repository{db}, nil
+	return &Repository{db}, nil
 }
 
-func (r *repository) Close() {
+func (r *Repository) Close() {
 	r.conn.Close()
 }
 

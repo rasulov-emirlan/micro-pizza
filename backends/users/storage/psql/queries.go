@@ -7,7 +7,7 @@ import (
 	"github.com/rasulov-emirlan/micro-pizzas/backends/users/domain"
 )
 
-func (r *repository) Create(ctx context.Context, u domain.User) (domain.ID, error) {
+func (r *Repository) Create(ctx context.Context, u domain.User) (domain.ID, error) {
 	sql, args, err := sq.Insert("users").Columns(
 		"full_name", "email", "password", "birth_date",
 		"country", "city", "street", "home_number",
@@ -33,7 +33,7 @@ func (r *repository) Create(ctx context.Context, u domain.User) (domain.ID, erro
 	return id, err
 }
 
-func (r *repository) Read(ctx context.Context, userID domain.ID) (domain.User, error) {
+func (r *Repository) Read(ctx context.Context, userID domain.ID) (domain.User, error) {
 	sql, args, err := sq.Select(
 		"id", "full_name", "email", "password",
 		"birth_date",
@@ -71,24 +71,24 @@ func (r *repository) Read(ctx context.Context, userID domain.ID) (domain.User, e
 	return u, nil
 }
 
-func (r *repository) ReadByName(ctx context.Context, fullName string) (domain.User, error) {
+func (r *Repository) ReadByName(ctx context.Context, fullName string) (domain.User, error) {
 	panic("not implemented")
 }
-func (r *repository) ReadByEmail(ctx context.Context, email string) (domain.User, error) {
+func (r *Repository) ReadByEmail(ctx context.Context, email string) (domain.User, error) {
 	panic("not implemented")
 }
-func (r *repository) ReadByPhoneNumber(ctx context.Context, phoneNumber string) (domain.User, error) {
+func (r *Repository) ReadByPhoneNumber(ctx context.Context, phoneNumber string) (domain.User, error) {
 	panic("not implemented")
 }
-func (r *repository) Update(ctx context.Context, changeset domain.UpdateInput) error {
+func (r *Repository) Update(ctx context.Context, changeset domain.UpdateInput) error {
 	panic("not implemented")
 }
-func (r *repository) AddRole(context.Context, domain.ID, domain.Role) error {
+func (r *Repository) AddRole(context.Context, domain.ID, domain.Role) error {
 	panic("not implemented")
 }
-func (r *repository) RemoveRole(context.Context, domain.ID, domain.Role) error {
+func (r *Repository) RemoveRole(context.Context, domain.ID, domain.Role) error {
 	panic("not implemented")
 }
-func (r *repository) Delete(context.Context, domain.ID) error {
+func (r *Repository) Delete(context.Context, domain.ID) error {
 	panic("not implemented")
 }
