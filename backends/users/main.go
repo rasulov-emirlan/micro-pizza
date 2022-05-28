@@ -4,31 +4,27 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rasulov-emirlan/micro-pizzas/backends/users/config"
-	"github.com/rasulov-emirlan/micro-pizzas/backends/users/migrations"
+	"github.com/rasulov-emirlan/micro-pizzas/backends/users/storage/psql"
 )
 
 func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("This is a users service"))
 	})
-	cfg, err := config.Load(".env")
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	time.Sleep(20 * time.Second)
-	if err := migrations.Up(
-		fmt.Sprintf(
-			"postgres://%s:%s@database:5432/%s?sslmode=disable",
-			cfg.Database.Username,
-			cfg.Database.Password,
-			cfg.Database.DBname),
-	); err != nil {
+	url := fmt.Sprintf("postgres://%s:%s@0.0.0.0:5432/%s?sslmode=disable",
+		cfg.Database.Username, cfg.Database.Password, cfg.Database.DBname)
+	repo, err := psql.NewRepository(url, true)
+	if err != nil {
+		log.Println(errors.Cause(err))
 		log.Fatal(err)
 	}
-	log.Println("just got up our migrations brother")
+	defer repo.Close()
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

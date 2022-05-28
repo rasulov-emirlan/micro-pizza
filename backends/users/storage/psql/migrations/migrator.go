@@ -8,7 +8,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// go:embed ./*.sql
+//go:embed *.sql
 var migrationFS embed.FS
 
 func Up(url string) error {
@@ -20,5 +20,8 @@ func Up(url string) error {
 	if err := goose.SetDialect("postgres"); err != nil {
 		return err
 	}
-	return goose.Up(db, ".")
+	if err := goose.Up(db, "."); err != nil {
+		return err
+	}
+	return db.Close()
 }
