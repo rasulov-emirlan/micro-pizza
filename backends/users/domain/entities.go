@@ -5,17 +5,7 @@ import "time"
 type (
 	ID   int64
 	Role uint
-)
 
-const (
-	RoleOwner Role = iota
-	RoleAdmin
-	RoleModerator
-	RoleDeliveryMan
-	RoleUser
-)
-
-type (
 	Address struct {
 		Country             string `json:"country"`
 		City                string `json:"city"`
@@ -41,4 +31,12 @@ type (
 		CreatedAt time.Time `json:"createdAt"`
 		UpdatedAt time.Time `json:"updatedAt"`
 	}
+)
+
+const (
+	RoleOwner Role = iota
+	RoleAdmin
+	RoleModerator
+	RoleDeliveryMan
+	RoleUser
 )

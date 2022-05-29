@@ -142,6 +142,10 @@ func (s *service) Refresh(ctx context.Context, refreshKey string) (SignInOutput,
 	return claims, nil
 }
 
+// TODO: not sure if we need role validation here
+// could be easier to do it in our transport layer
+// since every request will have jwt with roles
+
 func (s *service) AddRole(ctx context.Context, adminID, userID ID, role Role) error {
 	admin, err := s.repo.Read(ctx, adminID)
 	if err != nil {
@@ -155,12 +159,21 @@ func (s *service) AddRole(ctx context.Context, adminID, userID ID, role Role) er
 		}
 	}
 	if !isAllowed {
-		return errors.New("addRole(): not allowed")
+		return fmt.Errorf("addRole(): %w", ErrNotAllowed)
 	}
 	return fmt.Errorf("addRole(): %w", s.repo.AddRole(ctx, userID, role))
 }
 
 func (s *service) RemoveRole(ctx context.Context, adminID, userID ID, role Role) error {
+	u, err := s.repo.Read(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("removeRole(): %w", err)
+	}
+	for _, v := range u.Roles {
+		if v == RoleOwner {
+			return fmt.Errorf("removeRole(): %w", ErrOwnerCantBeRemoved)
+		}
+	}
 	admin, err := s.repo.Read(ctx, adminID)
 	if err != nil {
 		return fmt.Errorf("removeRole(): %w", err)
@@ -173,27 +186,14 @@ func (s *service) RemoveRole(ctx context.Context, adminID, userID ID, role Role)
 		}
 	}
 	if !isAllowed {
-		return errors.New("removeRole(): not allowed")
+		return fmt.Errorf("removeRole(): %w", ErrNotAllowed)
 	}
 	return fmt.Errorf("removeRole(): %w", s.repo.RemoveRole(ctx, userID, role))
 }
 
 func (s *service) Update(ctx context.Context, whoIsUpdating ID, changeset UpdateInput) error {
 	if whoIsUpdating != changeset.ID {
-		admin, err := s.repo.Read(ctx, whoIsUpdating)
-		if err != nil {
-			return fmt.Errorf("update(): %w", err)
-		}
-		isAllowed := false
-		for _, v := range admin.Roles {
-			if v == RoleAdmin || v == RoleOwner {
-				isAllowed = true
-				break
-			}
-		}
-		if !isAllowed {
-			return errors.New("update(): not allowed")
-		}
+		return fmt.Errorf("update(): %w", ErrNotAllowed)
 	}
 
 	// some users might not even have a password
@@ -201,7 +201,7 @@ func (s *service) Update(ctx context.Context, whoIsUpdating ID, changeset Update
 	if changeset.Password != "" {
 		// but if they have a password then force them to make a good one
 		if l := len(changeset.Password); l > 100 || l < 8 {
-			return errors.New("update(): password is not secure enough")
+			return ErrPasswordIsNotSecure
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(changeset.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -215,16 +215,25 @@ func (s *service) Update(ctx context.Context, whoIsUpdating ID, changeset Update
 	}
 	// TODO: add a better phone number validation
 	if l := len(changeset.PhoneNumber); l < 6 || l > 30 {
-		return errors.New("update(): invalid phone number")
+		return fmt.Errorf("update(): %w", ErrInvalidPhoneNumber)
 	}
 	if l := len(changeset.FullName); l == 0 || l > 250 {
-		return errors.New("update(): invalid full name")
+		return fmt.Errorf("update(): %w", ErrInvalidFullName)
 	}
 	return fmt.Errorf("update(): repo error: %w", s.repo.Update(ctx, changeset))
 }
 
 func (s *service) Delete(ctx context.Context, whosDeleting, whomToDelete ID) error {
 	if whosDeleting != whomToDelete {
+		u, err := s.repo.Read(ctx, whomToDelete)
+		if err != nil {
+			return fmt.Errorf("delete(): %w", err)
+		}
+		for _, v := range u.Roles {
+			if v == RoleOwner {
+				return fmt.Errorf("delete(): %w", ErrOwnerCantBeRemoved)
+			}
+		}
 		admin, err := s.repo.Read(ctx, whosDeleting)
 		if err != nil {
 			return fmt.Errorf("delete(): %w", err)
@@ -237,7 +246,7 @@ func (s *service) Delete(ctx context.Context, whosDeleting, whomToDelete ID) err
 			}
 		}
 		if !isAllowed {
-			return errors.New("delete(): not allowed")
+			return fmt.Errorf("delete(): %w", ErrNotAllowed)
 		}
 	}
 	return fmt.Errorf("delete(): repo error: %w", s.repo.Delete(ctx, whomToDelete))
