@@ -20,7 +20,7 @@ type (
 		Country             string `json:"country"`
 		City                string `json:"city"`
 		Street              string `json:"address"`
-		HomeNumber          int    `json:"homeNumber"`
+		Floor               int    `json:"floor"`
 		AddressInstructions string `json:"addressInstructions"`
 	}
 

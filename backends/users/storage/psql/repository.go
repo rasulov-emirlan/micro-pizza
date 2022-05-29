@@ -2,7 +2,6 @@ package psql
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rasulov-emirlan/micro-pizzas/backends/users/domain"
@@ -16,9 +15,6 @@ type Repository struct {
 func NewRepository(url string, withMigrations bool) (*Repository, error) {
 	db, err := pgxpool.Connect(context.Background(), url)
 	if err != nil {
-		// if our db starts in another docker container simultaneously
-		// with our app then we might have to wait for it to be ready
-		time.Sleep(10 * time.Second)
 		db, err = pgxpool.Connect(context.Background(), url)
 		if err != nil {
 			return nil, err
@@ -52,5 +48,22 @@ func parseRoles(role int) domain.Role {
 		return domain.RoleDeliveryMan
 	default:
 		return domain.RoleUser
+	}
+}
+
+func getRoleID(role domain.Role) int {
+	// TODO: change this code for some
+	// actual db calls maybe?
+	switch role {
+	case domain.RoleOwner:
+		return 1
+	case domain.RoleAdmin:
+		return 2
+	case domain.RoleModerator:
+		return 3
+	case domain.RoleDeliveryMan:
+		return 4
+	default:
+		return 5
 	}
 }

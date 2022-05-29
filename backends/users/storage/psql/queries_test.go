@@ -1,6 +1,7 @@
 package psql_test
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -16,8 +17,8 @@ var repo *psql.Repository
 
 const (
 	testUser     = "postgres"
+	testHost     = "0.0.0.0"
 	testPassword = "password"
-	testHost     = "localhost"
 	testDbName   = "micro-pizzas-users"
 )
 
@@ -27,25 +28,33 @@ func setup() *dockertest.Resource {
 		log.Fatalf("could not setup dockertest: %s", err.Error())
 	}
 
-	resource, err := pool.Run("postgres", "14", []string{fmt.Sprintf("POSTGRES_PASSWORD=%s", testPassword), fmt.Sprintf("POSTGRES_DB=%s", testDbName)})
+	resource, err := pool.Run(
+		"postgres", "14",
+		[]string{
+			fmt.Sprintf("POSTGRES_USER=%s", testUser),
+			fmt.Sprintf("POSTGRES_PASSWORD=%s", testPassword),
+			fmt.Sprintf("POSTGRES_DB=%s", testDbName)})
 	if err != nil {
 		log.Fatalf("could not start resource: %s", err)
 	}
-	testPort = resource.GetPort("5432/tcp") // Set port used to communicate with Postgres
-	// Exponential backoff-retry, because the application in the container might not be ready to accept connections yet
+	testPort = resource.GetPort("5432/tcp")
+
 	if err := pool.Retry(func() error {
-		r, err := psql.NewRepository(fmt.Sprintf("postgres://%s:%s@%s:%s/%s", testUser, testPassword, testHost, testPort, testDbName), true)
+		db, err := sql.Open("postgres",
+			fmt.Sprintf(
+				"postgres://%s:%s@%s:%s/%s",
+				testUser,
+				testPassword,
+				testHost,
+				testPort,
+				testDbName,
+			))
 		if err != nil {
 			return err
 		}
-		r.Close()
-		return err
+		return db.Ping()
 	}); err != nil {
-		log.Fatalf("could not connect to docker: %s", err.Error())
-	}
-	repo, err = psql.NewRepository(fmt.Sprintf("postgres://%s:%s@%s:%s/%s", testUser, testPassword, testHost, testPort, testDbName), true)
-	if err != nil {
-		log.Fatalf("could not connect to db: %s", err.Error())
+		log.Fatalf("could not connect to database: %s", err.Error())
 	}
 	return resource
 }
