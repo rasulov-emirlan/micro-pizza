@@ -52,8 +52,8 @@ type (
 	}
 
 	JWTmanager interface {
-		SetKey(key []byte) error
-		SetExp(access, refresh time.Duration) error
+		SetKey(key []byte)
+		SetExp(access, refresh time.Duration)
 
 		Generate(userID ID, roles []Role) (SignInOutput, error)
 		DecodeAccess(accessKey string) (AccessClaims, error)

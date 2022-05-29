@@ -20,6 +20,11 @@ type service struct {
 	jwtManager JWTmanager
 }
 
+const (
+	authRefreshExp = time.Hour * 24
+	authAccessExp  = time.Hour
+)
+
 func NewService(
 	r Repository,
 	s SMSsender,
@@ -49,8 +54,7 @@ func NewService(
 		return nil, ErrInvalidDependency
 	}
 
-	// errors here can be ignored
-	j.SetExp(time.Minute*20, time.Hour*24)
+	j.SetExp(authAccessExp, authRefreshExp)
 	j.SetKey(jwtKey)
 
 	return &service{
