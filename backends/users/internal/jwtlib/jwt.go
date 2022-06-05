@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
-	"github.com/rasulov-emirlan/micro-pizzas/backends/users/domain"
+	"github.com/rasulov-emirlan/micro-pizzas/backends/users/internal/domain"
 )
 
 type jwtmanager struct {

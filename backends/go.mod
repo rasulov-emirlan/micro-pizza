@@ -1,13 +1,17 @@
-module github.com/rasulov-emirlan/micro-pizzas/backends/users
+module github.com/rasulov-emirlan/micro-pizzas/backends
 
 go 1.18
 
 require (
 	github.com/Masterminds/squirrel v1.5.3
+	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/jackc/pgx/v4 v4.16.1
 	github.com/joho/godotenv v1.4.0
 	github.com/lib/pq v1.10.6
 	github.com/ory/dockertest/v3 v3.9.1
+	github.com/pkg/errors v0.9.1
 	github.com/pressly/goose/v3 v3.5.3
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 )
 
 require (
@@ -38,6 +42,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/opencontainers/runc v1.1.2 // indirect
+	github.com/ory/dockertest v3.3.5+incompatible
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
@@ -46,11 +51,4 @@ require (
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
 	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-)
-
-require (
-	github.com/golang-jwt/jwt v3.2.2+incompatible
-	github.com/jackc/pgx/v4 v4.16.1
-	github.com/pkg/errors v0.9.1
-	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 )

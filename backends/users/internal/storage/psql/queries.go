@@ -5,18 +5,16 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/rasulov-emirlan/micro-pizzas/backends/users/domain"
+	"github.com/jackc/pgx/v4"
+	"github.com/rasulov-emirlan/micro-pizzas/backends/users/internal/domain"
 )
 
 func (r *Repository) Create(ctx context.Context, u domain.User) (domain.ID, error) {
 	sql, args, err := sq.Insert("users").Columns(
 		"full_name", "email", "phone_number", "password", "birth_date",
-		"country", "city", "street", "floor",
-		"address_instructions", "created_at",
-	).Values(u.FullName, u.Email, u.PhoneNumber, u.Password, u.BirthDate,
-		u.Address.Country, u.Address.City, u.Address.Street,
-		u.Address.Floor, u.Address.AddressInstructions,
-	).Suffix("RETURNING \"id\"").PlaceholderFormat(sq.Dollar).ToSql()
+		"created_at",
+	).Values(u.FullName, u.Email, u.PhoneNumber, u.Password, u.BirthDate, u.CreatedAt).
+		Suffix("RETURNING \"id\"").PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
 		return 0, err
 	}
@@ -27,11 +25,33 @@ func (r *Repository) Create(ctx context.Context, u domain.User) (domain.ID, erro
 	}
 	defer conn.Release()
 
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
 	id := domain.ID(0)
 	if err := conn.QueryRow(ctx, sql, args...).Scan(&id); err != nil {
 		return id, err
 	}
-	return id, err
+
+	insertAddress := sq.Insert("addresses").
+		Columns("user_id", "country", "city", "street", "floor", "apartment", "instructions")
+	for _, v := range u.Addresses {
+		insertAddress = insertAddress.Values(id, v.CountryCode, v.City, v.Street, v.Floor, v.Apartment, v.Instructions)
+	}
+
+	sql, args, err = insertAddress.Suffix("RETURNING \"id\"").PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return id, err
+	}
+
+	_, err = tx.Exec(ctx, sql, args...)
+	if err != nil {
+		return id, err
+	}
+	return id, tx.Commit(ctx)
 }
 
 // TODO: all the Read methods that return a single domain.User
@@ -42,7 +62,6 @@ func (r *Repository) Read(ctx context.Context, userID domain.ID) (domain.User, e
 	sql, args, err := sq.Select(
 		"id", "full_name", "email", "password",
 		"birth_date", "phone_number",
-		"country", "city", "street", "floor", "address_instructions",
 		"ARRAY_AGGG(users_roles.role_id)",
 		"created_at",
 		"updated_at",
@@ -61,32 +80,66 @@ func (r *Repository) Read(ctx context.Context, userID domain.ID) (domain.User, e
 	}
 	defer conn.Release()
 
+	batch := pgx.Batch{}
+
+	// here we get our user
+	batch.Queue(sql, args...)
+
+	// here we get our user's addresses
+	sql, args, err = sq.Select(
+		"country", "city", "street", "floor", "apartment", "instructions",
+	).From("addresses").
+		Where("user_id = ?", userID).
+		PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return domain.User{}, err
+	}
+	batch.Queue(sql, args...)
+
+	// here we send our batch and read results
+	res := conn.SendBatch(ctx, &batch)
+
 	u := domain.User{}
 	roles := []int{}
-	if err := conn.QueryRow(ctx, sql, args).Scan(
+	if err := res.QueryRow().Scan(
 		&u.ID, &u.FullName, &u.Email, &u.PhoneNumber, &u.Password, &u.BirthDate,
-		&u.Address.Country, &u.Address.City, &u.Address.Street, &u.Address.Floor,
-		&u.Address.AddressInstructions, &roles, &u.CreatedAt, &u.UpdatedAt,
+		&roles, &u.CreatedAt, &u.UpdatedAt,
 	); err != nil {
 		return u, err
 	}
 	for _, v := range roles {
 		u.Roles = append(u.Roles, parseRoles(v))
 	}
-	return u, nil
+
+	// now we read all addresses
+	addresses := []domain.Address{}
+	rows, err := res.Query()
+	if err != nil {
+		return u, err
+	}
+	for rows.Next() {
+		address := domain.Address{}
+		if err := rows.Scan(
+			&address.CountryCode, &address.City, &address.Street, &address.Floor, &address.Apartment, &address.Instructions,
+		); err != nil {
+			return u, err
+		}
+	}
+
+	u.Addresses = addresses
+	return u, res.Close()
 }
 
 func (r *Repository) ReadByName(ctx context.Context, fullName string) (domain.User, error) {
 	sql, args, err := sq.Select(
 		"id", "full_name", "email", "password",
 		"birth_date", "phone_number",
-		"country", "city", "street", "floor", "address_instructions",
 		"ARRAY_AGGG(users_roles.role_id)",
 		"created_at",
 		"updated_at",
 	).From("users").
 		LeftJoin("users_roles").
-		Where("name = ?", fullName).
+		Where("full_name = ?", fullName).
 		GroupBy("id").
 		PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
@@ -99,26 +152,60 @@ func (r *Repository) ReadByName(ctx context.Context, fullName string) (domain.Us
 	}
 	defer conn.Release()
 
+	batch := pgx.Batch{}
+
+	// here we get our user
+	batch.Queue(sql, args...)
+
+	// here we get our user's addresses
+	sql, args, err = sq.Select(
+		"country", "city", "street", "floor", "apartment", "instructions",
+	).From("addresses").
+		Where("user_id = (SELECT id FROM users WHERE full_name = ?)", fullName).
+		PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return domain.User{}, err
+	}
+	batch.Queue(sql, args...)
+
+	// here we send our batch and read results
+	res := conn.SendBatch(ctx, &batch)
+
 	u := domain.User{}
 	roles := []int{}
-	if err := conn.QueryRow(ctx, sql, args).Scan(
-		&u.ID, &u.FullName, &u.Email, &u.Password, &u.BirthDate,
-		&u.Address.Country, &u.Address.City, &u.Address.Street, &u.Address.Floor,
-		&u.Address.AddressInstructions, &roles, &u.CreatedAt, &u.UpdatedAt,
+	if err := res.QueryRow().Scan(
+		&u.ID, &u.FullName, &u.Email, &u.PhoneNumber, &u.Password, &u.BirthDate,
+		&roles, &u.CreatedAt, &u.UpdatedAt,
 	); err != nil {
 		return u, err
 	}
 	for _, v := range roles {
 		u.Roles = append(u.Roles, parseRoles(v))
 	}
-	return u, nil
+
+	// now we read all addresses
+	addresses := []domain.Address{}
+	rows, err := res.Query()
+	if err != nil {
+		return u, err
+	}
+	for rows.Next() {
+		address := domain.Address{}
+		if err := rows.Scan(
+			&address.CountryCode, &address.City, &address.Street, &address.Floor, &address.Apartment, &address.Instructions,
+		); err != nil {
+			return u, err
+		}
+	}
+
+	u.Addresses = addresses
+	return u, res.Close()
 }
 
 func (r *Repository) ReadByEmail(ctx context.Context, email string) (domain.User, error) {
 	sql, args, err := sq.Select(
 		"id", "full_name", "email", "password",
 		"birth_date", "phone_number",
-		"country", "city", "street", "floor", "address_instructions",
 		"ARRAY_AGGG(users_roles.role_id)",
 		"created_at",
 		"updated_at",
@@ -137,26 +224,60 @@ func (r *Repository) ReadByEmail(ctx context.Context, email string) (domain.User
 	}
 	defer conn.Release()
 
+	batch := pgx.Batch{}
+
+	// here we get our user
+	batch.Queue(sql, args...)
+
+	// here we get our user's addresses
+	sql, args, err = sq.Select(
+		"country", "city", "street", "floor", "apartment", "instructions",
+	).From("addresses").
+		Where("user_id = (SELECT id FROM users WHERE email = ?)", email).
+		PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return domain.User{}, err
+	}
+	batch.Queue(sql, args...)
+
+	// here we send our batch and read results
+	res := conn.SendBatch(ctx, &batch)
+
 	u := domain.User{}
 	roles := []int{}
-	if err := conn.QueryRow(ctx, sql, args).Scan(
+	if err := res.QueryRow().Scan(
 		&u.ID, &u.FullName, &u.Email, &u.PhoneNumber, &u.Password, &u.BirthDate,
-		&u.Address.Country, &u.Address.City, &u.Address.Street, &u.Address.Floor,
-		&u.Address.AddressInstructions, &roles, &u.CreatedAt, &u.UpdatedAt,
+		&roles, &u.CreatedAt, &u.UpdatedAt,
 	); err != nil {
 		return u, err
 	}
 	for _, v := range roles {
 		u.Roles = append(u.Roles, parseRoles(v))
 	}
-	return u, nil
+
+	// now we read all addresses
+	addresses := []domain.Address{}
+	rows, err := res.Query()
+	if err != nil {
+		return u, err
+	}
+	for rows.Next() {
+		address := domain.Address{}
+		if err := rows.Scan(
+			&address.CountryCode, &address.City, &address.Street, &address.Floor, &address.Apartment, &address.Instructions,
+		); err != nil {
+			return u, err
+		}
+	}
+
+	u.Addresses = addresses
+	return u, res.Close()
 }
 
 func (r *Repository) ReadByPhoneNumber(ctx context.Context, phoneNumber string) (domain.User, error) {
 	sql, args, err := sq.Select(
 		"id", "full_name", "email", "password",
 		"birth_date", "phone_number",
-		"country", "city", "street", "floor", "address_instructions",
 		"ARRAY_AGGG(users_roles.role_id)",
 		"created_at",
 		"updated_at",
@@ -179,8 +300,7 @@ func (r *Repository) ReadByPhoneNumber(ctx context.Context, phoneNumber string) 
 	roles := []int{}
 	if err := conn.QueryRow(ctx, sql, args).Scan(
 		&u.ID, &u.FullName, &u.Email, &u.PhoneNumber, &u.Password, &u.BirthDate,
-		&u.Address.Country, &u.Address.City, &u.Address.Street, &u.Address.Floor,
-		&u.Address.AddressInstructions, &roles, &u.CreatedAt, &u.UpdatedAt,
+		&roles, &u.CreatedAt, &u.UpdatedAt,
 	); err != nil {
 		return u, err
 	}
@@ -197,11 +317,6 @@ func (r *Repository) Update(ctx context.Context, changeset domain.UpdateInput) e
 		Set("email", changeset.Email).
 		Set("phone_number", changeset.PhoneNumber).
 		Set("password", changeset.Password).
-		Set("country", changeset.Address.Country).
-		Set("city", changeset.Address.City).
-		Set("street", changeset.Address.Street).
-		Set("floor", changeset.Address.Floor).
-		Set("address_instructions", changeset.Address.AddressInstructions).
 		Set("updated_at", time.Now().UTC()).
 		PlaceholderFormat(sq.Dollar).
 		ToSql()

@@ -5,6 +5,8 @@ import "errors"
 var (
 	ErrInvalidDependency = errors.New("domain: provided dependency is nil")
 
+	ErrInvalidRequestSignUpInput = errors.New("domain: request sign up requires at least phone number or email")
+
 	ErrInvalidToken       = errors.New("domain: provided jwt is invalid")
 	ErrInvalidPhoneNumber = errors.New("domain: provided phone number is invalid")
 	ErrInvalidFullName    = errors.New("domain: provided full name is invalid")

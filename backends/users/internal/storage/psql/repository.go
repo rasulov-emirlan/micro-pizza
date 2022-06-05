@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/rasulov-emirlan/micro-pizzas/backends/users/domain"
-	"github.com/rasulov-emirlan/micro-pizzas/backends/users/storage/psql/migrations"
+	"github.com/rasulov-emirlan/micro-pizzas/backends/users/internal/domain"
+	"github.com/rasulov-emirlan/micro-pizzas/backends/users/internal/storage/psql/migrations"
 )
 
 type Repository struct {
@@ -15,10 +15,7 @@ type Repository struct {
 func NewRepository(url string, withMigrations bool) (*Repository, error) {
 	db, err := pgxpool.Connect(context.Background(), url)
 	if err != nil {
-		db, err = pgxpool.Connect(context.Background(), url)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 	if err := db.Ping(context.Background()); err != nil {
 		return nil, err

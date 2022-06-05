@@ -7,11 +7,12 @@ type (
 	Role uint
 
 	Address struct {
-		Country             string `json:"country"`
-		City                string `json:"city"`
-		Street              string `json:"address"`
-		Floor               int    `json:"floor"`
-		AddressInstructions string `json:"addressInstructions"`
+		CountryCode  string `json:"countryCode"`
+		City         string `json:"city"`
+		Street       string `json:"address"`
+		Floor        *int   `json:"floor,omitempty"`
+		Apartment    *int   `json:"apartment,omitempty"`
+		Instructions string `json:"Instructions"`
 	}
 
 	User struct {
@@ -26,17 +27,9 @@ type (
 
 		BirthDate time.Time `json:"birthDate"`
 
-		Address Address `json:"address"`
+		Addresses []Address `json:"addresses"`
 
 		CreatedAt time.Time `json:"createdAt"`
 		UpdatedAt time.Time `json:"updatedAt"`
 	}
-)
-
-const (
-	RoleOwner Role = iota
-	RoleAdmin
-	RoleModerator
-	RoleDeliveryMan
-	RoleUser
 )

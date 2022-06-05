@@ -7,23 +7,38 @@ import (
 
 type (
 	Service interface {
-		SignUp(context.Context, SignUpInput) error
+		// For signin up you have to prove that provided email or phone number
+		// is yours. And after you sign up you will be automaticaly signed in.
+		RequestSignUp(context.Context, RequestSignUpInput) error
+		SignUp(context.Context, SignUpInput) (SignInOutput, error)
 
 		RequestSignIn(ctx context.Context, phoneNumber string) error
+		RequestSignInEmail(ctx context.Context, email string) error
 		SignIn(ctx context.Context, phoneNumber string, code []byte) (SignInOutput, error)
+		SignInEmail(ctx context.Context, email, code []byte) (SignInOutput, error)
 
-		SignInEmail(ctx context.Context, email, password string) (SignInOutput, error)
+		SignInEmailPassword(ctx context.Context, email, password string) (SignInOutput, error)
 		Refresh(ctx context.Context, refreshKey string) (SignInOutput, error)
 
-		AddRole(ctx context.Context, adminID, userID ID, role Role) error
-		RemoveRole(ctx context.Context, adminID, userID ID, role Role) error
+		AddRole(ctx context.Context, userID ID, role Role) error
+		RemoveRole(ctx context.Context, userID ID, role Role) error
 
-		Update(ctx context.Context, whoIsUpdating ID, changeset UpdateInput) error
-		Delete(ctx context.Context, whosDeleting, whomToDelete ID) error
+		Read(ctx context.Context, id ID) (User, error)
+		ReadByEmail(ctx context.Context, email string) (User, error)
+		ReadByPhoneNumber(ctx context.Context, phoneNumber string) (User, error)
+
+		ReadAll(ctx context.Context, cfg ReadAllInput) ([]User, error)
+
+		Update(ctx context.Context, changeset UpdateInput) error
+		Delete(ctx context.Context, userID ID) error
 	}
 
 	SMSsender interface {
-		Send(phoneNumber string, code []byte) error
+		Send(phoneNumber, title, text string) error
+	}
+
+	Emailer interface {
+		Send(email, title, text string) error
 	}
 
 	Cache interface {

@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
-	"github.com/rasulov-emirlan/micro-pizzas/backends/users/config"
-	"github.com/rasulov-emirlan/micro-pizzas/backends/users/storage/psql"
+	"github.com/rasulov-emirlan/micro-pizzas/backends/users/internal/config"
+	"github.com/rasulov-emirlan/micro-pizzas/backends/users/internal/storage/psql"
 )
 
 func main() {

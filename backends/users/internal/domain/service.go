@@ -16,14 +16,10 @@ type service struct {
 	repo       Repository
 	cache      Cache
 	sms        SMSsender
+	emailer    Emailer
 	logger     Logger
 	jwtManager JWTmanager
 }
-
-const (
-	authRefreshExp = time.Hour * 24
-	authAccessExp  = time.Hour
-)
 
 func NewService(
 	r Repository,
@@ -54,7 +50,7 @@ func NewService(
 		return nil, ErrInvalidDependency
 	}
 
-	j.SetExp(authAccessExp, authRefreshExp)
+	j.SetExp(AuthAccessExp, AuthRefreshExp)
 	j.SetKey(jwtKey)
 
 	return &service{
@@ -65,14 +61,29 @@ func NewService(
 	}, nil
 }
 
+func (s *service) RequestSignUp(ctx context.Context, inp RequestSignUpInput) error {
+	code := make([]byte, CodeLength)
+	if _, err := rand.Read(code); err != nil {
+		return fmt.Errorf("requestSignUp(): %w", err)
+	}
+
+	switch {
+	case len(inp.PhoneNumber) != 0:
+	case len(inp.Email) != 0:
+	default:
+		return ErrInvalidRequestSignUpInput
+	}
+	return nil
+}
+
 func (s *service) SignUp(ctx context.Context, inp SignUpInput) error {
 	u := User{
 		FullName:    inp.FullName,
 		Email:       inp.Email,
 		PhoneNumber: inp.PhoneNumber,
-		Address:     inp.Address,
+		Addresses:   []Address{inp.Address},
 		Roles:       []Role{RoleUser},
-		BirthDate:   inp.BirthData,
+		BirthDate:   inp.BirthDate,
 		CreatedAt:   time.Now().UTC(),
 	}
 	_, err := s.repo.Create(ctx, u)
@@ -83,7 +94,7 @@ func (s *service) SignUp(ctx context.Context, inp SignUpInput) error {
 }
 
 func (s *service) RequestSignIn(ctx context.Context, phoneNumber string) error {
-	code := make([]byte, 4)
+	code := make([]byte, CodeLength)
 	if _, err := rand.Read(code); err != nil {
 		return fmt.Errorf("requestSignIn(): %w", err)
 	}
@@ -94,7 +105,7 @@ func (s *service) RequestSignIn(ctx context.Context, phoneNumber string) error {
 }
 
 func (s *service) SignIn(ctx context.Context, phoneNumber string, code []byte) (SignInOutput, error) {
-	if len(code) != 4 {
+	if len(code) != CodeLength {
 		return SignInOutput{}, errors.New("signIn(): incorrect code")
 	}
 	realCode, err := s.cache.Get(phoneNumber)
@@ -121,11 +132,11 @@ func (s *service) SignInEmail(ctx context.Context, email, password string) (Sign
 		return SignInOutput{}, fmt.Errorf("signInEmail(): %w", err)
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
-		return SignInOutput{}, fmt.Errorf("signInemail(): password is incorrect %w", err)
+		return SignInOutput{}, fmt.Errorf("signInEmail(): password is incorrect %w", err)
 	}
 	claims, err := s.jwtManager.Generate(u.ID, u.Roles)
 	if err != nil {
-		return claims, fmt.Errorf("signInemail(): %w", err)
+		return claims, fmt.Errorf("signInEmail(): %w", err)
 	}
 	return claims, nil
 }
@@ -168,43 +179,28 @@ func (s *service) AddRole(ctx context.Context, adminID, userID ID, role Role) er
 	return fmt.Errorf("addRole(): %w", s.repo.AddRole(ctx, userID, role))
 }
 
-func (s *service) RemoveRole(ctx context.Context, adminID, userID ID, role Role) error {
+func (s *service) RemoveRole(ctx context.Context, userID ID, role Role) error {
 	u, err := s.repo.Read(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("removeRole(): %w", err)
 	}
 	for _, v := range u.Roles {
 		if v == RoleOwner {
-			return fmt.Errorf("removeRole(): %w", ErrOwnerCantBeRemoved)
+			return fmt.Errorf("removeRole(): %w", ErrNotAllowed)
 		}
-	}
-	admin, err := s.repo.Read(ctx, adminID)
-	if err != nil {
-		return fmt.Errorf("removeRole(): %w", err)
-	}
-	isAllowed := false
-	for _, v := range admin.Roles {
-		if v == RoleAdmin || v == RoleOwner {
-			isAllowed = true
-			break
-		}
-	}
-	if !isAllowed {
-		return fmt.Errorf("removeRole(): %w", ErrNotAllowed)
 	}
 	return fmt.Errorf("removeRole(): %w", s.repo.RemoveRole(ctx, userID, role))
 }
 
-func (s *service) Update(ctx context.Context, whoIsUpdating ID, changeset UpdateInput) error {
-	if whoIsUpdating != changeset.ID {
-		return fmt.Errorf("update(): %w", ErrNotAllowed)
-	}
-
+// Make sure that the one calling this function is the user itself
+// If not then he has to be at least an admin. And keep in mind that nobody exept
+// the owner can change owners fields
+func (s *service) Update(ctx context.Context, changeset UpdateInput) error {
 	// some users might not even have a password
 	// so we do not force them to update it
 	if changeset.Password != "" {
 		// but if they have a password then force them to make a good one
-		if l := len(changeset.Password); l > 100 || l < 8 {
+		if l := len(changeset.Password); l > PasswordMaxLength || l < PasswordMinLength {
 			return ErrPasswordIsNotSecure
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(changeset.Password), bcrypt.DefaultCost)
@@ -227,29 +223,13 @@ func (s *service) Update(ctx context.Context, whoIsUpdating ID, changeset Update
 	return fmt.Errorf("update(): repo error: %w", s.repo.Update(ctx, changeset))
 }
 
-func (s *service) Delete(ctx context.Context, whosDeleting, whomToDelete ID) error {
-	if whosDeleting != whomToDelete {
-		u, err := s.repo.Read(ctx, whomToDelete)
-		if err != nil {
-			return fmt.Errorf("delete(): %w", err)
-		}
-		for _, v := range u.Roles {
-			if v == RoleOwner {
-				return fmt.Errorf("delete(): %w", ErrOwnerCantBeRemoved)
-			}
-		}
-		admin, err := s.repo.Read(ctx, whosDeleting)
-		if err != nil {
-			return fmt.Errorf("delete(): %w", err)
-		}
-		isAllowed := false
-		for _, v := range admin.Roles {
-			if v == RoleAdmin || v == RoleOwner {
-				isAllowed = true
-				break
-			}
-		}
-		if !isAllowed {
+func (s *service) Delete(ctx context.Context, whomToDelete ID) error {
+	u, err := s.repo.Read(ctx, whomToDelete)
+	if err != nil {
+		return fmt.Errorf("delete(): %w", err)
+	}
+	for _, v := range u.Roles {
+		if v == RoleOwner {
 			return fmt.Errorf("delete(): %w", ErrNotAllowed)
 		}
 	}

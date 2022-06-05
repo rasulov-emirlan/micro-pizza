@@ -1,0 +1,37 @@
+# Summary
+
+Date : 2022-06-05 23:03:10
+
+Directory /home/enkidu/dev/micro-pizza/backends
+
+Total : 17 files,  1739 codes, 0 comments, 193 blanks, all 1932 lines
+
+Summary / [Details](details.md) / [Diff Summary](diff.md) / [Diff Details](diff-details.md)
+
+## Languages
+| language | files | code | comment | blank | total |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Go | 14 | 1,021 | 0 | 181 | 1,202 |
+| Go Checksum File | 1 | 629 | 0 | 1 | 630 |
+| Go Module File | 1 | 51 | 0 | 4 | 55 |
+| Protocol Buffers | 1 | 38 | 0 | 7 | 45 |
+
+## Directories
+| path | files | code | comment | blank | total |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| . | 17 | 1,739 | 0 | 193 | 1,932 |
+| users | 15 | 1,059 | 0 | 188 | 1,247 |
+| users/cmd | 1 | 27 | 0 | 4 | 31 |
+| users/cmd/api | 1 | 27 | 0 | 4 | 31 |
+| users/internal | 14 | 1,032 | 0 | 184 | 1,216 |
+| users/internal/config | 1 | 41 | 0 | 7 | 48 |
+| users/internal/domain | 6 | 369 | 0 | 75 | 444 |
+| users/internal/jwtlib | 1 | 89 | 0 | 19 | 108 |
+| users/internal/sms | 1 | 8 | 0 | 3 | 11 |
+| users/internal/storage | 4 | 487 | 0 | 73 | 560 |
+| users/internal/storage/psql | 4 | 487 | 0 | 73 | 560 |
+| users/internal/storage/psql/migrations | 1 | 23 | 0 | 5 | 28 |
+| users/internal/transport | 1 | 38 | 0 | 7 | 45 |
+| users/internal/transport/protos | 1 | 38 | 0 | 7 | 45 |
+
+Summary / [Details](details.md) / [Diff Summary](diff.md) / [Diff Details](diff-details.md)
