@@ -9,11 +9,26 @@ type (
 	}
 
 	SignUpInput struct {
-		PhoneNumber string    `json:"phoneNumber"`
-		Email       string    `json:"email"`
-		FullName    string    `json:"fullName"`
-		BirthDate   time.Time `json:"birthDate"`
-		Address     Address   `json:"address"`
+		Code string `json:"code"`
+
+		// which ever is not empty will be used
+		PhoneNumber string `json:"phoneNumber"`
+		Email       string `json:"email"`
+
+		FullName  string    `json:"fullName"`
+		BirthDate time.Time `json:"birthDate"`
+		Address   Address   `json:"address"`
+	}
+
+	RequestSignInInput struct {
+		PhoneNumber string `json:"phoneNumber"`
+		Email       string `json:"email"`
+	}
+
+	SignInInput struct {
+		Code        string `json:"code"`
+		PhoneNumber string `json:"phoneNumber"`
+		Email       string `json:"email"`
 	}
 
 	SignInOutput struct {

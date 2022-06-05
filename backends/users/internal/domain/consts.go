@@ -32,10 +32,24 @@ const (
 	Here is your code for signin up
 	`
 
-	SignUpEmailTitle = `
+	RequestSignUpSMSTitle = `
 	Micro-Pizzas sign up code
 	`
 	RequestSignUpSMSMessage = `
 	Here is your code for signin up
+	`
+
+	RequestSignInEmailTitle = `
+	Micro-Pizzas sign in code
+	`
+	RequestSignInEmailMessage = `
+	Here is your code for signin in
+	`
+
+	RequestSignInSMSTitle = `
+	Micro-Pizzas sign in code
+	`
+	RequestSignInSMSMessage = `
+	Here is your code for signin in
 	`
 )

@@ -3,7 +3,6 @@ package domain
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"net/mail"
 	"reflect"
@@ -61,6 +60,38 @@ func NewService(
 	}, nil
 }
 
+func (s *service) Read(ctx context.Context, id ID) (User, error) {
+	u, err := s.repo.Read(ctx, id)
+	if err != nil {
+		return User{}, fmt.Errorf("read(): could not read from db %w", err)
+	}
+	return u, nil
+}
+
+func (s *service) ReadByEmail(ctx context.Context, email string) (User, error) {
+	u, err := s.repo.ReadByEmail(ctx, email)
+	if err != nil {
+		return User{}, fmt.Errorf("readByEmail(): could not read from db %w", err)
+	}
+	return u, nil
+}
+
+func (s *service) ReadByPhoneNumber(ctx context.Context, phoneNumber string) (User, error) {
+	u, err := s.repo.ReadByPhoneNumber(ctx, phoneNumber)
+	if err != nil {
+		return User{}, fmt.Errorf("readByPhoneNumber(): could not read from db %w", err)
+	}
+	return u, nil
+}
+
+func (s *service) ReadAll(ctx context.Context, cfg ReadAllInput) ([]User, error) {
+	u, err := s.repo.ReadAll(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("readAll(): could not read from db %w", err)
+	}
+	return u, nil
+}
+
 func (s *service) RequestSignUp(ctx context.Context, inp RequestSignUpInput) error {
 	code := make([]byte, CodeLength)
 	if _, err := rand.Read(code); err != nil {
@@ -69,74 +100,160 @@ func (s *service) RequestSignUp(ctx context.Context, inp RequestSignUpInput) err
 
 	switch {
 	case len(inp.PhoneNumber) != 0:
+		if err := s.sms.Send(
+			inp.PhoneNumber,
+			RequestSignUpSMSTitle,
+			RequestSignUpSMSMessage+":"+string(code),
+		); err != nil {
+			return fmt.Errorf("requestSignUp(): could not send sms %w", err)
+		}
+		s.cache.Store(inp.PhoneNumber, string(code))
 	case len(inp.Email) != 0:
+		if err := s.emailer.Send(
+			inp.Email,
+			RequestSignUpEmailTitle,
+			RequestSignUpEmailMessage+":"+string(code),
+		); err != nil {
+			return fmt.Errorf("requestSignUp(): could not send email %w", err)
+		}
+		s.cache.Store(inp.Email, string(code))
 	default:
 		return ErrInvalidRequestSignUpInput
 	}
 	return nil
 }
 
-func (s *service) SignUp(ctx context.Context, inp SignUpInput) error {
-	u := User{
-		FullName:    inp.FullName,
-		Email:       inp.Email,
-		PhoneNumber: inp.PhoneNumber,
-		Addresses:   []Address{inp.Address},
-		Roles:       []Role{RoleUser},
-		BirthDate:   inp.BirthDate,
-		CreatedAt:   time.Now().UTC(),
+func (s *service) SignUp(ctx context.Context, inp SignUpInput) (SignInOutput, error) {
+	switch {
+	case len(inp.PhoneNumber) != 0:
+		code, err := s.cache.Get(inp.PhoneNumber)
+		if err != nil {
+			return SignInOutput{}, fmt.Errorf("signUp(): %w", err)
+		}
+		if code != inp.Code {
+			return SignInOutput{}, fmt.Errorf("signUp(): %w", ErrInvalidCode)
+		}
+	case len(inp.Email) != 0:
+		code, err := s.cache.Get(inp.Email)
+		if err != nil {
+			return SignInOutput{}, fmt.Errorf("signUp(): %w", err)
+		}
+		if code != inp.Code {
+			return SignInOutput{}, fmt.Errorf("signUp(): %w", ErrInvalidCode)
+		}
+	default:
+		return SignInOutput{}, ErrInvalidSignUpInput
 	}
-	_, err := s.repo.Create(ctx, u)
-	if err != nil {
-		return fmt.Errorf("signUp(): %w", err)
-	}
-	return nil
-}
 
-func (s *service) RequestSignIn(ctx context.Context, phoneNumber string) error {
-	code := make([]byte, CodeLength)
-	if _, err := rand.Read(code); err != nil {
-		return fmt.Errorf("requestSignIn(): %w", err)
+	var (
+		u = User{
+			FullName:    inp.FullName,
+			Email:       inp.Email,
+			PhoneNumber: inp.PhoneNumber,
+			Addresses:   []Address{inp.Address},
+			Roles:       []Role{RoleUser},
+			BirthDate:   inp.BirthDate,
+			CreatedAt:   time.Now().UTC(),
+		}
+		err error
+	)
+	u.ID, err = s.repo.Create(ctx, u)
+	if err != nil {
+		return SignInOutput{}, fmt.Errorf("signUp(): %w", err)
 	}
-	if err := s.sms.Send(phoneNumber, code); err != nil {
-		return fmt.Errorf("requestSignIn: %w", err)
-	}
-	return s.cache.Store(phoneNumber, string(code))
-}
 
-func (s *service) SignIn(ctx context.Context, phoneNumber string, code []byte) (SignInOutput, error) {
-	if len(code) != CodeLength {
-		return SignInOutput{}, errors.New("signIn(): incorrect code")
-	}
-	realCode, err := s.cache.Get(phoneNumber)
-	if err != nil {
-		return SignInOutput{}, fmt.Errorf("signIn(): %w", err)
-	}
-	if realCode != string(code) {
-		return SignInOutput{}, errors.New("signIn(): incorrect code")
-	}
-	u, err := s.repo.ReadByPhoneNumber(ctx, phoneNumber)
-	if err != nil {
-		return SignInOutput{}, fmt.Errorf("signIn(): %w", err)
-	}
 	claims, err := s.jwtManager.Generate(u.ID, u.Roles)
 	if err != nil {
-		return claims, fmt.Errorf("signIn(): %w", err)
+		return claims, fmt.Errorf("signUp(): could not generate jwt due to: %w", err)
 	}
 	return claims, nil
 }
 
-func (s *service) SignInEmail(ctx context.Context, email, password string) (SignInOutput, error) {
+func (s *service) RequestSignIn(ctx context.Context, inp RequestSignInInput) error {
+	code := make([]byte, CodeLength)
+	if _, err := rand.Read(code); err != nil {
+		return fmt.Errorf("requestSignIn(): %w", err)
+	}
+
+	switch {
+	case len(inp.PhoneNumber) != 0:
+		if err := s.sms.Send(
+			inp.PhoneNumber,
+			RequestSignInSMSTitle,
+			RequestSignInSMSMessage+":"+string(code),
+		); err != nil {
+			return fmt.Errorf("requestSignIn(): could not send sms %w", err)
+		}
+		if err := s.cache.Store(inp.PhoneNumber, string(code)); err != nil {
+			return fmt.Errorf("requestSignIn(): %w", err)
+		}
+	case len(inp.Email) != 0:
+		if err := s.emailer.Send(
+			inp.Email,
+			RequestSignInEmailTitle,
+			RequestSignInEmailMessage+":"+string(code),
+		); err != nil {
+			return fmt.Errorf("requestSignIn(): could not send email %w", err)
+		}
+		if err := s.cache.Store(inp.Email, string(code)); err != nil {
+			return fmt.Errorf("requestSignIn(): %w", err)
+		}
+	default:
+		return ErrInvalidSignInInput
+	}
+	return nil
+}
+
+func (s *service) SignIn(ctx context.Context, inp SignInInput) (SignInOutput, error) {
+	var (
+		u   User
+		err error
+	)
+	switch {
+	case len(inp.PhoneNumber) != 0:
+		code, err := s.cache.Get(inp.PhoneNumber)
+		if err != nil {
+			return SignInOutput{}, fmt.Errorf("signIn(): could read from cache %w", err)
+		}
+		if code != inp.Code {
+			return SignInOutput{}, fmt.Errorf("signIn(): %w", ErrInvalidCode)
+		}
+		u, err = s.repo.ReadByPhoneNumber(ctx, inp.PhoneNumber)
+	case len(inp.Email) != 0:
+		code, err := s.cache.Get(inp.Email)
+		if err != nil {
+			return SignInOutput{}, fmt.Errorf("signIn(): could read from cache %w", err)
+		}
+		if code != inp.Code {
+			return SignInOutput{}, fmt.Errorf("signIn(): %w", ErrInvalidCode)
+		}
+		u, err = s.repo.ReadByEmail(ctx, inp.Email)
+	default:
+		return SignInOutput{}, ErrInvalidSignInInput
+	}
+
+	if err != nil {
+		return SignInOutput{}, fmt.Errorf("signIn(): could not read from db %w", err)
+	}
+
+	claims, err := s.jwtManager.Generate(u.ID, u.Roles)
+	if err != nil {
+		return claims, fmt.Errorf("signIn(): could not generate jwt due to: %w", err)
+	}
+	return claims, nil
+}
+
+func (s *service) SignInEmailPassword(ctx context.Context, email, password string) (SignInOutput, error) {
 	u, err := s.repo.ReadByEmail(ctx, email)
 	if err != nil {
-		return SignInOutput{}, fmt.Errorf("signInEmail(): %w", err)
+		return SignInOutput{}, fmt.Errorf("signInEmailPassword(): could not read from db %w", err)
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
-		return SignInOutput{}, fmt.Errorf("signInEmail(): password is incorrect %w", err)
+		return SignInOutput{}, fmt.Errorf("signInEmailPassword(): password is incorrect %w", err)
 	}
 	claims, err := s.jwtManager.Generate(u.ID, u.Roles)
 	if err != nil {
-		return claims, fmt.Errorf("signInEmail(): %w", err)
+		return claims, fmt.Errorf("signInEmailPassword(): %w", err)
 	}
 	return claims, nil
 }
@@ -161,20 +278,9 @@ func (s *service) Refresh(ctx context.Context, refreshKey string) (SignInOutput,
 // could be easier to do it in our transport layer
 // since every request will have jwt with roles
 
-func (s *service) AddRole(ctx context.Context, adminID, userID ID, role Role) error {
-	admin, err := s.repo.Read(ctx, adminID)
-	if err != nil {
-		return fmt.Errorf("addRole(): %w", err)
-	}
-	isAllowed := false
-	for _, v := range admin.Roles {
-		if v == RoleAdmin || v == RoleOwner {
-			isAllowed = true
-			break
-		}
-	}
-	if !isAllowed {
-		return fmt.Errorf("addRole(): %w", ErrNotAllowed)
+func (s *service) AddRole(ctx context.Context, userID ID, role Role) error {
+	if role == RoleOwner {
+		return fmt.Errorf("addRole(): owners can be asigned only manualy %w", ErrInvalidRole)
 	}
 	return fmt.Errorf("addRole(): %w", s.repo.AddRole(ctx, userID, role))
 }

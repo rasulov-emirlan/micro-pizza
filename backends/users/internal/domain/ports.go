@@ -12,11 +12,8 @@ type (
 		RequestSignUp(context.Context, RequestSignUpInput) error
 		SignUp(context.Context, SignUpInput) (SignInOutput, error)
 
-		RequestSignIn(ctx context.Context, phoneNumber string) error
-		RequestSignInEmail(ctx context.Context, email string) error
-		SignIn(ctx context.Context, phoneNumber string, code []byte) (SignInOutput, error)
-		SignInEmail(ctx context.Context, email, code []byte) (SignInOutput, error)
-
+		RequestSignIn(ctx context.Context, inp RequestSignInInput) error
+		SignIn(ctx context.Context, inp SignInInput) (SignInOutput, error)
 		SignInEmailPassword(ctx context.Context, email, password string) (SignInOutput, error)
 		Refresh(ctx context.Context, refreshKey string) (SignInOutput, error)
 
@@ -33,6 +30,23 @@ type (
 		Delete(ctx context.Context, userID ID) error
 	}
 
+	Repository interface {
+		Create(context.Context, User) (ID, error)
+
+		Read(context.Context, ID) (User, error)
+		ReadByName(ctx context.Context, fullName string) (User, error)
+		ReadByEmail(ctx context.Context, email string) (User, error)
+		ReadByPhoneNumber(ctx context.Context, phoneNumber string) (User, error)
+
+		ReadAll(ctx context.Context, cfg ReadAllInput) ([]User, error)
+
+		Update(ctx context.Context, changeset UpdateInput) error
+		AddRole(context.Context, ID, Role) error
+
+		RemoveRole(context.Context, ID, Role) error
+		Delete(context.Context, ID) error
+	}
+
 	SMSsender interface {
 		Send(phoneNumber, title, text string) error
 	}
@@ -44,21 +58,6 @@ type (
 	Cache interface {
 		Store(key, value string) error
 		Get(key string) (value string, err error)
-	}
-
-	Repository interface {
-		Create(context.Context, User) (ID, error)
-
-		Read(context.Context, ID) (User, error)
-		ReadByName(ctx context.Context, fullName string) (User, error)
-		ReadByEmail(ctx context.Context, email string) (User, error)
-		ReadByPhoneNumber(ctx context.Context, phoneNumber string) (User, error)
-
-		Update(ctx context.Context, changeset UpdateInput) error
-		AddRole(context.Context, ID, Role) error
-
-		RemoveRole(context.Context, ID, Role) error
-		Delete(context.Context, ID) error
 	}
 
 	Logger interface {
