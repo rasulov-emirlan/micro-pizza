@@ -14,8 +14,6 @@ const (
 	ReadAllSortByFullNameDESC
 	ReadAllSortByEmailASC
 	ReadAllSortByEmailDESC
-	ReadAllSortByRoleASC
-	ReadAllSortByRoleDESC
 
 	AuthRefreshExp = time.Hour * 24
 	AuthAccessExp  = time.Hour

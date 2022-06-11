@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+option go_package = "userspb";
+
+service UserService {
+    rpc RequestSignUp(RequestSignUpRequest) returns (Empty) {}
+    rpc SignUp(SignUpRequest) returns (SignUpResponse) {}
+
+    rpc RequestSignIn(RequestSignInRequest) returns (Empty) {}
+    rpc SignIn(SignInRequest) returns (SignInResponse) {}
+    rpc SignInEmailPassword(SignInEmailPasswordRequest) returns (SignInEmailPasswordResponse) {}
+    rpc Refresh(RefreshRequest) returns (RefreshResponse) {}
+
+    rpc AddRole(AddRoleRequest) returns (Empty) {}
+    rpc RemoveRole(RemoveRoleRequest) returns (Empty) {}
+
+    rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
+    rpc GetUserByEmail(GetUserByEmailRequest) returns (GetUserByEmailResponse) {}
+    rpc GetUserByPhoneNumber(GetUserByPhoneNumberRequest) returns (GetUserByPhoneNumberResponse) {}
+    rpc GetUsers(GetUsersRequest) returns (GetUsersResponse) {}
+
+    rpc UpdateUser(UpdateUserRequest) returns (Empty) {}
+    rpc DeleteUser(DeleteUserRequest) returns (Empty) {}
+}
+
+message Empty {
+}
+
+message User {
+    uint64 id           = 1;
+    string email        = 2;
+    string phone_number = 3;
+    string password     = 4;
+    string full_name    = 5;
+
+    enum Role {
+        OWNER       = 0;
+        ADMIN       = 1;
+        MODERATOR   = 2;
+        DELIVERYMAN = 3;
+        USER        = 4;
+    }
+
+    Role roles = 6;
+}
+
+message Address {
+    string country      = 1;
+    string city         = 2;
+    string street       = 3;
+    int32  floor        = 4;
+    int32  apartment    = 5;
+    string instructions = 6;
+}
+
+message SignUpRequest {
+    string fullName    = 1;
+    string phoneNumber = 2;
+    int64  birthDate   = 3;
+    string email       = 4;
+    Address address    = 5;
+}
+
+message SignInRequest {
+    string phoneNumber = 1;
+    string email       = 2;
+}

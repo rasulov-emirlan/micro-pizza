@@ -49,10 +49,11 @@ type (
 	Sorting uint
 
 	ReadAllInput struct {
-		Limit       int     `json:"limit"`
-		Offset      int     `json:"offset"`
+		Limit       uint64  `json:"limit"`
+		Offset      uint64  `json:"offset"`
 		SortBy      Sorting `json:"sortBy"`
 		CountryCode string  `json:"countryCode"`
+		Roles       []Role  `json:"excludeRoles"`
 	}
 
 	// Structs bellow are for JWTmanager's use

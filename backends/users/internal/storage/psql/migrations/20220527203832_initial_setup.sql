@@ -8,29 +8,35 @@ CREATE TABLE IF NOT EXISTS roles (
     description text not null
 );
 
-INSERT INTO roles (name, description) VALUES ('owner', 'admin', 'moderator', 'deliver_man', 'user');
+INSERT INTO roles (name, description)
+    VALUES 
+    ('owner', 'Owner of the application'),
+    ('admin', 'Admins can manage users and roles'),
+    ('moderator', 'Moderators are allowed to add items and remove them'),
+    ('deliveryman' , 'Deliverymans are allowed to see orders and deliver them'),
+    ('user', 'Users are allowed to use the application');
 
 CREATE TABLE IF NOT EXISTS users (
-    id                  bigint primary key generated always as identity,
-    full_name           text not null,
-    email               text,
-    phone_number        text,
-    password            text,
-    birth_date          date,
-    created_at          timestamptz not null,
-    updated_at          timestamptz
+    id           bigint primary key generated always as identity,
+    full_name    text not null,
+    email        text,
+    phone_number text,
+    password     text,
+    birth_date   date,
+    created_at   timestamptz not null default now(),
+    updated_at   timestamptz
 );
 
 CREATE TABLE IF NOT EXISTS addresses (
-    user_id             bigint not null,
-    country             text not null,
-    city                text not null,
-    street              text not null,
-    floor               integer,
-    apartment           integer,
-    instrutions text,
-    created_at          timestamptz not null,
-    updated_at          timestamptz,
+    user_id      bigint not null,
+    country_code text not null,
+    city         text not null,
+    street       text not null,
+    floor        integer,
+    apartment    integer,
+    instructions text,
+    created_at   timestamptz not null default now(),
+    updated_at   timestamptz,
     CONSTRAINT fk_addresses_user_id FOREIGN KEY (user_id)
         REFERENCES users (id)
 );

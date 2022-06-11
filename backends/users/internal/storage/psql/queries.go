@@ -6,6 +6,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v4"
+	"github.com/lib/pq"
 	"github.com/rasulov-emirlan/micro-pizzas/backends/users/internal/domain"
 )
 
@@ -54,11 +55,8 @@ func (r *Repository) Create(ctx context.Context, u domain.User) (domain.ID, erro
 	return id, tx.Commit(ctx)
 }
 
-// TODO: all the Read methods that return a single domain.User
-// use almost the same query
-// maybe we could somehow reuse the same query for all of them
-// and just pass different args to it
 func (r *Repository) Read(ctx context.Context, userID domain.ID) (domain.User, error) {
+
 	sql, args, err := sq.Select(
 		"id", "full_name", "email", "password",
 		"birth_date", "phone_number",
@@ -308,6 +306,78 @@ func (r *Repository) ReadByPhoneNumber(ctx context.Context, phoneNumber string) 
 		u.Roles = append(u.Roles, parseRoles(v))
 	}
 	return u, nil
+}
+
+func (r *Repository) ReadAll(ctx context.Context, inp domain.ReadAllInput) ([]domain.User, error) {
+	query := sq.Select(
+		`id, full_name, email, phone_number, birth_date, created_at, updated_at, ARRAY_AGGG(users_roles.role_id) as all_roles`,
+	).From("users u").
+		LeftJoin("users_roles ur ON ur.user_id = u.id").
+		LeftJoin("roles r ON r.id = ur.role_id").
+		GroupBy("id").Limit(inp.Limit).Offset(inp.Offset)
+
+	if len(inp.CountryCode) != 0 {
+		query.LeftJoin("addresses a ON a.user_id = u.id").Where(sq.Eq{"country": inp.CountryCode})
+	}
+
+	switch inp.SortBy {
+	case domain.ReadAllSortByEmailASC:
+		query.OrderBy("email ASC")
+	case domain.ReadAllSortByEmailDESC:
+		query.OrderBy("email DESC")
+	case domain.ReadAllSortByFullNameASC:
+		query.OrderBy("full_name ASC")
+	case domain.ReadAllSortByFullNameDESC:
+		query.OrderBy("full_name DESC")
+	}
+
+	if len(inp.Roles) > 0 {
+		havingRole := sq.Eq{}
+		for _, v := range inp.Roles {
+			havingRole["all_roles"] = getRoleID(v)
+		}
+		query.Having(havingRole)
+	}
+
+	sql, args, err := query.PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := r.conn.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Release()
+
+	rows, err := conn.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var (
+		users     []domain.User
+		user      domain.User
+		updatedAt pq.NullTime
+		roles     []int
+	)
+
+	for rows.Next() {
+		if err := rows.Scan(
+			&user.ID, &user.FullName, &user.Email, &user.PhoneNumber, &user.BirthDate, &user.CreatedAt, &updatedAt, &roles,
+		); err != nil {
+			return nil, err
+		}
+		if updatedAt.Valid {
+			user.UpdatedAt = updatedAt.Time
+		}
+		for _, v := range roles {
+			user.Roles = append(user.Roles, parseRoles(v))
+		}
+		users = append(users, user)
+	}
+	return users, nil
 }
 
 func (r *Repository) Update(ctx context.Context, changeset domain.UpdateInput) error {

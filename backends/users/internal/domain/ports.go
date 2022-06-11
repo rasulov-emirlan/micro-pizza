@@ -1,5 +1,6 @@
 package domain
 
+//go:generate mockgen -source=ports.go -package=mocks -destination=./mocks/ports.go
 import (
 	"context"
 	"time"

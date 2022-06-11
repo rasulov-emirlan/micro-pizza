@@ -3,7 +3,7 @@ package domain
 import "time"
 
 type (
-	ID   int64
+	ID   uint64
 	Role uint
 
 	Address struct {

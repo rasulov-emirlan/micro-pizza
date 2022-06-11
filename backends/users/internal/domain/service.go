@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"reflect"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -23,6 +24,7 @@ type service struct {
 func NewService(
 	r Repository,
 	s SMSsender,
+	m Emailer,
 	c Cache,
 	l Logger,
 	j JWTmanager,
@@ -48,6 +50,10 @@ func NewService(
 		v.IsNil() {
 		return nil, ErrInvalidDependency
 	}
+	if v := reflect.ValueOf(m); v.Kind() == reflect.Pointer &&
+		v.IsNil() {
+		return nil, ErrInvalidDependency
+	}
 
 	j.SetExp(AuthAccessExp, AuthRefreshExp)
 	j.SetKey(jwtKey)
@@ -55,6 +61,7 @@ func NewService(
 	return &service{
 		repo:       r,
 		sms:        s,
+		emailer:    m,
 		logger:     l,
 		jwtManager: j,
 	}, nil
@@ -99,7 +106,7 @@ func (s *service) RequestSignUp(ctx context.Context, inp RequestSignUpInput) err
 	}
 
 	switch {
-	case len(inp.PhoneNumber) != 0:
+	case utf8.RuneCountInString(inp.PhoneNumber) != 0:
 		if err := s.sms.Send(
 			inp.PhoneNumber,
 			RequestSignUpSMSTitle,
@@ -107,8 +114,10 @@ func (s *service) RequestSignUp(ctx context.Context, inp RequestSignUpInput) err
 		); err != nil {
 			return fmt.Errorf("requestSignUp(): could not send sms %w", err)
 		}
-		s.cache.Store(inp.PhoneNumber, string(code))
-	case len(inp.Email) != 0:
+		if err := s.cache.Store(inp.PhoneNumber, string(code)); err != nil {
+			return fmt.Errorf("requestSignUp(): could not cache %w", err)
+		}
+	case utf8.RuneCountInString(inp.Email) != 0:
 		if err := s.emailer.Send(
 			inp.Email,
 			RequestSignUpEmailTitle,
@@ -116,7 +125,9 @@ func (s *service) RequestSignUp(ctx context.Context, inp RequestSignUpInput) err
 		); err != nil {
 			return fmt.Errorf("requestSignUp(): could not send email %w", err)
 		}
-		s.cache.Store(inp.Email, string(code))
+		if err := s.cache.Store(inp.Email, string(code)); err != nil {
+			return fmt.Errorf("requestSignUp(): could not cache %w", err)
+		}
 	default:
 		return ErrInvalidRequestSignUpInput
 	}
@@ -125,7 +136,7 @@ func (s *service) RequestSignUp(ctx context.Context, inp RequestSignUpInput) err
 
 func (s *service) SignUp(ctx context.Context, inp SignUpInput) (SignInOutput, error) {
 	switch {
-	case len(inp.PhoneNumber) != 0:
+	case utf8.RuneCountInString(inp.PhoneNumber) != 0:
 		code, err := s.cache.Get(inp.PhoneNumber)
 		if err != nil {
 			return SignInOutput{}, fmt.Errorf("signUp(): %w", err)
@@ -133,7 +144,7 @@ func (s *service) SignUp(ctx context.Context, inp SignUpInput) (SignInOutput, er
 		if code != inp.Code {
 			return SignInOutput{}, fmt.Errorf("signUp(): %w", ErrInvalidCode)
 		}
-	case len(inp.Email) != 0:
+	case utf8.RuneCountInString(inp.Email) != 0:
 		code, err := s.cache.Get(inp.Email)
 		if err != nil {
 			return SignInOutput{}, fmt.Errorf("signUp(): %w", err)
@@ -176,7 +187,7 @@ func (s *service) RequestSignIn(ctx context.Context, inp RequestSignInInput) err
 	}
 
 	switch {
-	case len(inp.PhoneNumber) != 0:
+	case utf8.RuneCountInString(inp.PhoneNumber) != 0:
 		if err := s.sms.Send(
 			inp.PhoneNumber,
 			RequestSignInSMSTitle,
@@ -187,7 +198,7 @@ func (s *service) RequestSignIn(ctx context.Context, inp RequestSignInInput) err
 		if err := s.cache.Store(inp.PhoneNumber, string(code)); err != nil {
 			return fmt.Errorf("requestSignIn(): %w", err)
 		}
-	case len(inp.Email) != 0:
+	case utf8.RuneCountInString(inp.Email) != 0:
 		if err := s.emailer.Send(
 			inp.Email,
 			RequestSignInEmailTitle,
@@ -207,11 +218,12 @@ func (s *service) RequestSignIn(ctx context.Context, inp RequestSignInInput) err
 func (s *service) SignIn(ctx context.Context, inp SignInInput) (SignInOutput, error) {
 	var (
 		u   User
+		code string
 		err error
 	)
 	switch {
-	case len(inp.PhoneNumber) != 0:
-		code, err := s.cache.Get(inp.PhoneNumber)
+	case utf8.RuneCountInString(inp.PhoneNumber) != 0:
+		code, err = s.cache.Get(inp.PhoneNumber)
 		if err != nil {
 			return SignInOutput{}, fmt.Errorf("signIn(): could read from cache %w", err)
 		}
@@ -219,8 +231,8 @@ func (s *service) SignIn(ctx context.Context, inp SignInInput) (SignInOutput, er
 			return SignInOutput{}, fmt.Errorf("signIn(): %w", ErrInvalidCode)
 		}
 		u, err = s.repo.ReadByPhoneNumber(ctx, inp.PhoneNumber)
-	case len(inp.Email) != 0:
-		code, err := s.cache.Get(inp.Email)
+	case utf8.RuneCountInString(inp.Email) != 0:
+		code, err = s.cache.Get(inp.Email)
 		if err != nil {
 			return SignInOutput{}, fmt.Errorf("signIn(): could read from cache %w", err)
 		}
@@ -306,7 +318,7 @@ func (s *service) Update(ctx context.Context, changeset UpdateInput) error {
 	// so we do not force them to update it
 	if changeset.Password != "" {
 		// but if they have a password then force them to make a good one
-		if l := len(changeset.Password); l > PasswordMaxLength || l < PasswordMinLength {
+		if l := utf8.RuneCountInString(changeset.Password); l > PasswordMaxLength || l < PasswordMinLength {
 			return ErrPasswordIsNotSecure
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(changeset.Password), bcrypt.DefaultCost)
@@ -320,10 +332,10 @@ func (s *service) Update(ctx context.Context, changeset UpdateInput) error {
 		return fmt.Errorf("update(): invalid email: %w", err)
 	}
 	// TODO: add a better phone number validation
-	if l := len(changeset.PhoneNumber); l < 6 || l > 30 {
+	if l := utf8.RuneCountInString(changeset.PhoneNumber); l < 6 || l > 30 {
 		return fmt.Errorf("update(): %w", ErrInvalidPhoneNumber)
 	}
-	if l := len(changeset.FullName); l == 0 || l > 250 {
+	if l := utf8.RuneCountInString(changeset.FullName); l == 0 || l > 250 {
 		return fmt.Errorf("update(): %w", ErrInvalidFullName)
 	}
 	return fmt.Errorf("update(): repo error: %w", s.repo.Update(ctx, changeset))
